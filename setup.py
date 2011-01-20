@@ -3,6 +3,10 @@ import os
 
 version = '1.0dev'
 
+tests_require = [
+    'Products.Silva [test]',
+    ]
+
 setup(name='silva.security.renameusers',
       version=version,
       description="Rename users identifier in a Silva site",
@@ -25,7 +29,15 @@ setup(name='silva.security.renameusers',
       include_package_data=True,
       zip_safe=False,
       install_requires=[
+        'Products.Silva',
         'five.grok',
         'setuptools',
+        'silva.core.conf',
+        'silva.core.services',
+        'zeam.form.silva',
+        'zope.interface',
+        'zope.schema',
         ],
+      tests_require = tests_require,
+      extras_require = {'test': tests_require},
       )

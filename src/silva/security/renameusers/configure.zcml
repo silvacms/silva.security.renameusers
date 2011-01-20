@@ -4,6 +4,7 @@
 
   <include package="five.grok" />
   <include package="zeam.form.silva" />
+  <include package="Products.Silva" />
 
   <grok:grok package="." />
 

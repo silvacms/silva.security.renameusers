@@ -13,6 +13,7 @@ from zope import interface, schema
 
 # There is no interface (yet) for that service.
 from Products.Silva.ExtensionService import ExtensionService
+from Acquisition import aq_base
 
 
 class IRenameUsersFields(interface.Interface):
@@ -24,16 +25,19 @@ class IRenameUsersFields(interface.Interface):
         required=True)
 
     update_roles = schema.Bool(
-        title=u"Update permission access/ownership to use the new identifier",
-        description=u"Rename user identifier in Zope local roles " \
-            u"definitions on Silva content.",
+        title=u"Update content local roles",
+        description=u"Rename user identifier in Zope local roles.",
         default=True,
         required=True)
 
-    update_version_roles = schema.Bool(
-        title=u"Update ownership information on versions",
-        description=u"Rename user identifier in Zope local roles " \
-            u"definitions on Silva content version.",
+    update_ownership = schema.Bool(
+        title=u"Update content ownership information",
+        default=True,
+        required=True)
+
+    update_version = schema.Bool(
+        title=u"Update Silva content versions as well",
+        description=u"Rename local roles/ownership on Silva content version.",
         default=False,
         required=True)
 
@@ -45,35 +49,56 @@ class IRenameUsersFields(interface.Interface):
 
     @interface.invariant
     def update_roles_invariant(options):
-        if options.update_version_roles and not options.update_roles:
+        if (options.update_version and not (
+                options.update_roles or options.update_ownership)):
             raise interface.Invalid(
                 u"Cannot update version ownership without "
                 u"updating all permission access/ownership information.")
+
+
+def update_roles(mapping, content):
+    to_remove = []
+    to_add = []
+    changed = 0
+    for identifier, roles in content.get_local_roles():
+        if identifier in mapping:
+            to_remove.append(identifier)
+            to_add.append((mapping[identifier], roles))
+            changed += 1
+    for identifier in to_remove:
+        content.manage_delLocalRoles([identifier])
+    for identifier, roles in to_add:
+        content.manage_setLocalRoles(identifier, roles)
+    return changed
+
+def update_ownership(mapping, content):
+    info = aq_base(content).getOwnerTuple()
+    if info is not None:
+        if info[1] in mapping:
+            acl_users = content.acl_users
+            user = acl_users.getUser(mapping[info[1]])
+            if user is not None:
+                content.changeOwnership(user.__of__(acl_users), False)
+                return 1
+    return 0
 
 
 class RenameUsersForm(silvaforms.ZMIForm):
     grok.context(ExtensionService)
     grok.name('manage_renameUsers')
 
-    label = u"Rename user identifiers"
-    description = u"Non-undoable user identifiers mass-modification."
+    label = u"Rename users"
+    description = u"User identifiers mass-modification."
     fields = silvaforms.Fields(IRenameUsersFields)
 
-    def update_roles(self, mapping, do_version=False):
-        modification_count = 0
+    def update_silva_contents(self, mapping, updaters, do_version=False):
+        if not updaters:
+            return []
+        changes = [0] * len(updaters)
         for content in walk_silva_tree(self.context.get_root(), do_version):
-            to_remove = []
-            to_add = []
-            for identifier, roles in content.get_local_roles():
-                if identifier in mapping:
-                    to_remove.append(identifier)
-                    to_add.append((mapping[identifier], roles))
-                    modification_count += 1
-            for identifier in to_remove:
-                content.manage_delLocalRoles([identifier])
-            for identifier, roles in to_add:
-                content.manage_setLocalRoles(identifier, roles)
-        return modification_count
+            for index, updater in enumerate(updaters):
+                changes[index] += updater(mapping, content)
+        return changes
 
     def rename_members(self, mapping):
         modification_count = 0
@@ -122,9 +147,21 @@ class RenameUsersForm(silvaforms.ZMIForm):
         if data['update_members']:
             count = self.rename_members(mapping)
             messages.append('renamed %d members objects' % count)
+
+        updaters = []
+        messages_format = []
         if data['update_roles']:
-            count = self.update_roles(mapping, data['update_version_roles'])
-            messages.append('reaffected %d roles' % count)
+            updaters.append(update_roles)
+            messages_format.append('reaffected %d roles')
+        if data['update_ownership']:
+            updaters.append(update_ownership)
+            messages_format.append('changed %d owners')
+
+        changes = self.update_silva_contents(
+            mapping, updaters, data['update_version'])
+        for index, count in enumerate(changes):
+            messages.append(messages_format[index] % (count))
+
         self.status = u', '.join(messages) + u'.'
         return silvaforms.SUCCESS
 
