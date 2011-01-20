@@ -24,15 +24,31 @@ class IRenameUsersFields(interface.Interface):
         required=True)
 
     update_roles = schema.Bool(
-        title=u"Update permission access to use the new identifier",
+        title=u"Update permission access/ownership to use the new identifier",
+        description=u"Rename user identifier in Zope local roles " \
+            u"definitions on Silva content.",
         default=True,
+        required=True)
+
+    update_version_roles = schema.Bool(
+        title=u"Update ownership information on versions",
+        description=u"Rename user identifier in Zope local roles " \
+            u"definitions on Silva content version.",
+        default=False,
         required=True)
 
     update_members = schema.Bool(
         title=u"Update members objects to the new identifier",
-        description=u"Rename members objects and update theirs identifiers.",
+        description=u"Rename Silva members and update theirs identifiers.",
         default=True,
         required=True)
+
+    @interface.invariant
+    def update_roles_invariant(options):
+        if options.update_version_roles and not options.update_roles:
+            raise interface.Invalid(
+                u"Cannot update version ownership without "
+                u"updating all permission access/ownership information.")
 
 
 class RenameUsersForm(silvaforms.ZMIForm):
@@ -43,9 +59,9 @@ class RenameUsersForm(silvaforms.ZMIForm):
     description = u"Non-undoable user identifiers mass-modification."
     fields = silvaforms.Fields(IRenameUsersFields)
 
-    def update_roles(self, mapping):
+    def update_roles(self, mapping, do_version=False):
         modification_count = 0
-        for content in walk_silva_tree(self.context.get_root()):
+        for content in walk_silva_tree(self.context.get_root(), do_version):
             to_remove = []
             to_add = []
             for identifier, roles in content.get_local_roles():
@@ -107,7 +123,7 @@ class RenameUsersForm(silvaforms.ZMIForm):
             count = self.rename_members(mapping)
             messages.append('renamed %d members objects' % count)
         if data['update_roles']:
-            count = self.update_roles(mapping)
+            count = self.update_roles(mapping, data['update_version_roles'])
             messages.append('reaffected %d roles' % count)
         self.status = u', '.join(messages) + u'.'
         return silvaforms.SUCCESS
