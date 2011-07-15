@@ -95,7 +95,7 @@ class RenameUsersForm(silvaforms.ZMIForm):
         if not updaters:
             return []
         changes = [0] * len(updaters)
-        for content in walk_silva_tree(self.context.get_root(), do_version):
+        for content in walk_silva_tree(self.context.get_root(), version=do_version):
             for index, updater in enumerate(updaters):
                 changes[index] += updater(mapping, content)
         return changes
