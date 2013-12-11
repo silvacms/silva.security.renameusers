@@ -9,7 +9,7 @@ tests_require = [
 
 setup(name='silva.security.renameusers',
       version=version,
-      description="Rename users identifier in a Silva site",
+      description="Rename user identifiers in a Silva site",
       long_description=open("README.txt").read() + "\n" +
                        open(os.path.join("docs", "HISTORY.txt")).read(),
       classifiers=[
@@ -21,7 +21,7 @@ setup(name='silva.security.renameusers',
       keywords='silva cms zope security rename users',
       author='Infrae',
       author_email='info@infrae.com',
-      url='http://infrae.com/products/silva',
+      url='https://github.com/silvacms/silva.security.renameusers',
       license='BSD',
       package_dir={'': 'src'},
       packages=find_packages('src', exclude=['ez_setup']),
